@@ -31,11 +31,47 @@ export interface TicketStatusResult {
   sequenceId?: number;
 }
 
+export interface TicketSummary {
+  planeTicketId: string;
+  sequenceId?: number;
+  status: string;
+  description: string;
+}
+
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
 
   constructor(private readonly plane: PlaneService) {}
+
+  private normalizeStatus(rawStatus?: string): string {
+    const normalized = (rawStatus ?? '').trim().toLowerCase();
+
+    if (
+      normalized.includes('done') ||
+      normalized.includes('closed') ||
+      normalized.includes('resuelto') ||
+      normalized.includes('cerrado')
+    ) {
+      return 'cerrado';
+    }
+    if (
+      normalized.includes('blocked') ||
+      normalized.includes('bloqueado') ||
+      normalized.includes('hold')
+    ) {
+      return 'bloqueado';
+    }
+    if (
+      normalized.includes('progress') ||
+      normalized.includes('in review') ||
+      normalized.includes('en curso') ||
+      normalized.includes('en proceso')
+    ) {
+      return 'en_proceso';
+    }
+    return 'abierto';
+  }
 
   /**
    * Crea un ticket en Plane. Sin persistencia local.
@@ -43,7 +79,7 @@ export class TicketsService {
   async createTicket(input: CreateTicketInput): Promise<TicketResult> {
     try {
       const planeTicket = await this.plane.createTicket({
-        name: `[Soporte] ${input.projectName} — ${input.description.substring(0, 60)}`,
+        name: `[Intake Soporte] ${input.projectName} - ${input.description.substring(0, 60)}`,
         description: input.description,
         customerId: input.planeCustomerId,
         projectName: input.projectName,
@@ -82,7 +118,7 @@ export class TicketsService {
       const ticket = await this.plane.getTicket(ticketId, projectId);
       return {
         found: true,
-        status: ticket.state_detail?.name ?? 'Abierto',
+        status: this.normalizeStatus(ticket.state_detail?.name),
         description: ticket.name,
         planeTicketId: ticket.id,
         sequenceId: ticket.sequence_id,
@@ -91,4 +127,15 @@ export class TicketsService {
       return { found: false };
     }
   }
+
+  async listTicketStatuses(projectId: string, limit = 20): Promise<TicketSummary[]> {
+    const tickets = await this.plane.listProjectTickets(projectId, limit);
+    return tickets.map((ticket) => ({
+      planeTicketId: ticket.id,
+      sequenceId: ticket.sequence_id,
+      status: this.normalizeStatus(ticket.state_detail?.name),
+      description: ticket.name,
+    }));
+  }
 }
+

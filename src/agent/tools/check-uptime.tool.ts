@@ -15,11 +15,25 @@ export function buildCheckUptimeTool(uptimeService: UptimeService) {
         .string()
         .optional()
         .describe(
-          'Nombre parcial del servicio o proyecto a consultar. Si se omite, retorna el estado de todos los servicios.',
+          'Nombre parcial del cliente o proyecto. Ej: si el proyecto es "Soporte TechNova 2", pasar "TechNova". Si se omite, retorna todos los servicios.',
         ),
+      projectName: z
+        .string()
+        .optional()
+        .describe('Nombre completo del proyecto (disponible en validate-customer → projects[].name). Se extrae el nombre del cliente automáticamente.'),
     }),
     execute: async (inputData) => {
-      const { serviceName } = inputData;
+      const { projectName } = inputData;
+
+      // Extraer nombre limpio: "Soporte TechNova 2" → "TechNova"
+      // Quita prefijos comunes (Soporte, Sistema, App, Plataforma) y sufijos numéricos
+      const rawName = inputData.serviceName ?? projectName ?? '';
+      const serviceName = rawName
+        ? rawName
+            .replace(/^(soporte|sistema|app|plataforma|implementación|tracking)\s+/i, '')
+            .replace(/\s+\d+$/, '')
+            .trim() || rawName
+        : undefined;
 
       if (serviceName) {
         const status = await uptimeService.getServiceStatus(serviceName);

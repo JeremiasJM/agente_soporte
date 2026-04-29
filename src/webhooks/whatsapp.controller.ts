@@ -11,10 +11,10 @@ import {
   Logger,
   ForbiddenException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { MetaWhatsappService } from '../integrations/meta/meta-whatsapp.service';
 import { AgentService } from '../agent/agent.service';
-import { MetaWebhookPayload } from '../integrations/meta/dto/meta-message.dto';
+import type { MetaWebhookPayload } from '../integrations/meta/dto/meta-message.dto';
 
 @Controller('webhooks/whatsapp')
 export class WhatsappController {

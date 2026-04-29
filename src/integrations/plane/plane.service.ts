@@ -6,9 +6,11 @@ import {
   PlaneCustomer,
   PlaneEstimate,
   PlaneEstimatePoint,
+  PlaneIntakeIssueResponse,
   PlaneProjectPage,
   PlaneProjectRaw,
   PlaneProjectWithHours,
+  PlaneState,
   PlaneTicket,
 } from './dto/plane-ticket.dto';
 
@@ -27,6 +29,11 @@ interface PlaneIssueRaw {
   estimate_point?: string | null;
   created_at?: string;
   project_id?: string;
+}
+
+interface PlaneIssueListResponse {
+  results: PlaneTicket[];
+  next?: string | null;
 }
 
 @Injectable()
@@ -53,7 +60,8 @@ export class PlaneService {
   // ─── Tickets / Issues ─────────────────────────────────────────────────────
 
   /**
-   * Crea un ticket/issue en Plane y retorna la info básica del ticket creado.
+   * Crea un ticket como Intake en Plane y retorna la info básica del ticket creado.
+   * Usa el endpoint /intake/issues/ para que aparezca en la bandeja de triage.
    */
   async createTicket(dto: CreatePlaneTicketDto): Promise<PlaneTicket> {
     const overageNote = dto.isOverage
@@ -92,9 +100,12 @@ export class PlaneService {
   }
 
   /**
-   * Obtiene el estado de un ticket en Plane.
-   * Si ticketId es un número, busca por sequence_id en el proyecto.
+   * Obtiene el estado de un ticket en Plane con state_detail completo.
+   * Si ticketId es un número, busca por sequence_id y luego fetcha el issue individual.
    * Si ticketId es un UUID, busca directamente.
+   *
+   * IMPORTANTE: el list endpoint no incluye state_detail — siempre se hace
+   * un segundo GET por UUID para obtener el estado real del ticket.
    */
   async getTicket(ticketId: string, projectId?: string): Promise<PlaneTicket> {
     const resolvedProjectId = projectId ?? this.fallbackProjectId;
@@ -102,23 +113,78 @@ export class PlaneService {
       throw new Error('No se puede consultar el ticket sin projectId');
     }
 
-    // Si es número, buscar por sequence_id
+    // Si es número, buscar por sequence_id en el listado y luego fetchear individualmente
     const isSequenceId = /^\d+$/.test(ticketId.trim());
     if (isSequenceId) {
-      const res = await this.http.get<{ results: PlaneTicket[] }>(
+      const sequenceId = Number(ticketId.trim());
+      const res = await this.http.get<PlaneIssueListResponse>(
         `/workspaces/${this.workspaceSlug}/projects/${resolvedProjectId}/issues/`,
-        { params: { sequence_id: ticketId.trim() } },
+        { params: { per_page: 100 } },
       );
-      const ticket = res.data.results?.[0];
-      if (!ticket) throw new Error(`Ticket #${ticketId} no encontrado`);
-      return ticket;
+
+      const found = (res.data.results ?? []).find((issue) => issue.sequence_id === sequenceId);
+      if (!found) throw new Error(`Ticket #${ticketId} no encontrado`);
+
+      // Fetch individual para obtener state_detail completo (no incluido en listas)
+      const detail = await this.http.get<PlaneTicket>(
+        `/workspaces/${this.workspaceSlug}/projects/${resolvedProjectId}/issues/${found.id}/`,
+      );
+      return detail.data;
     }
 
-    // UUID directo
+    // UUID directo — la respuesta incluye state_detail
     const response = await this.http.get<PlaneTicket>(
       `/workspaces/${this.workspaceSlug}/projects/${resolvedProjectId}/issues/${ticketId}/`,
     );
     return response.data;
+  }
+
+  /**
+   * Lista tickets de un proyecto enriquecidos con state_detail.
+   * El list endpoint de Plane devuelve `state` (UUID) pero no `state_detail`.
+   * Se resuelve fetcheando los states del proyecto y haciendo join local.
+   */
+  async listProjectTickets(projectId: string, limit = 20): Promise<PlaneTicket[]> {
+    const [issuesRes, states] = await Promise.all([
+      this.http.get<PlaneIssueListResponse>(
+        `/workspaces/${this.workspaceSlug}/projects/${projectId}/issues/`,
+        { params: { per_page: Math.min(Math.max(limit, 1), 100) } },
+      ),
+      this.getProjectStates(projectId),
+    ]);
+
+    const stateMap = new Map(states.map((s) => [s.id, s]));
+    const tickets = issuesRes.data.results ?? [];
+
+    return tickets.map((ticket) => {
+      if (!ticket.state_detail && ticket.state) {
+        const state = stateMap.get(ticket.state);
+        if (state) {
+          return { ...ticket, state_detail: { id: state.id, name: state.name, group: state.group } };
+        }
+      }
+      return ticket;
+    });
+  }
+
+  /** Fetcha los estados de un proyecto. Cacheado 5 min por projectId. */
+  private statesCache = new Map<string, { data: PlaneState[]; at: number }>();
+
+  async getProjectStates(projectId: string): Promise<PlaneState[]> {
+    const TTL = 5 * 60 * 1000;
+    const cached = this.statesCache.get(projectId);
+    if (cached && Date.now() - cached.at < TTL) return cached.data;
+
+    try {
+      const res = await this.http.get<{ results: PlaneState[] }>(
+        `/workspaces/${this.workspaceSlug}/projects/${projectId}/states/`,
+      );
+      const data = res.data.results ?? [];
+      this.statesCache.set(projectId, { data, at: Date.now() });
+      return data;
+    } catch {
+      return [];
+    }
   }
 
   /**

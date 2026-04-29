@@ -146,7 +146,7 @@ export class FaqService {
       }
     }
 
-    if (!bestMatch || bestMatch.score < 1) return null;
+    if (!bestMatch || bestMatch.score < 2) return null;
 
     this.logger.log(`FAQ estatica match (score=${bestMatch.score}): ${bestMatch.question}`);
     return bestMatch;

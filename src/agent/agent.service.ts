@@ -81,8 +81,25 @@ export class AgentService implements OnModuleInit {
         };
       }
 
-      const response = await this.agent.generate(messages);
+      const response = await this.agent.generate(messages, { maxSteps: 10 });
+
+      // Mastra puede incluir texto intermedio (previo a tool calls) en response.text.
+      // Estrategia: usar el texto del último step. Si está vacío, usar response.text completo.
+      // Si response.text contiene múltiples bloques separados por texto intermedio,
+      // tomamos el último párrafo significativo.
+      const steps: Array<{ text?: string; toolCalls?: unknown[] }> =
+        (response as unknown as { steps?: Array<{ text?: string; toolCalls?: unknown[] }> }).steps ?? [];
+
+      this.logger.debug(`Steps: ${steps.length} | texts: ${steps.map((s) => (s.text ?? '').substring(0, 40)).join(' | ')}`);
+
+      // Tomar el texto del último step (sea o no el que tuvo tool calls)
+      const lastStepWithText = steps
+        .slice()
+        .reverse()
+        .find((s) => s.text && s.text.trim());
+
       const agentReply =
+        lastStepWithText?.text?.trim() ??
         response.text ??
         'Lo siento, no pude procesar tu mensaje en este momento.';
 

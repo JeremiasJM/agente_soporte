@@ -19,12 +19,30 @@ export interface PlaneTicket {
   sequence_id: number;
   name: string;
   description_html?: string;
+  /** UUID del estado — presente en respuestas de lista */
+  state?: string;
+  /** Detalle del estado — presente en respuesta de issue individual */
   state_detail?: {
+    id?: string;
     name: string;
     group: string;
   };
   created_at: string;
   updated_at: string;
+}
+
+export interface PlaneState {
+  id: string;
+  name: string;
+  group: 'backlog' | 'unstarted' | 'started' | 'completed' | 'cancelled';
+}
+
+/** Respuesta del endpoint de intake de Plane */
+export interface PlaneIntakeIssueResponse {
+  id: string;
+  issue: PlaneTicket;
+  status: number;
+  source?: string;
 }
 
 // ---------------------------------------------------------------------------

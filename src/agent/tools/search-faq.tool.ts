@@ -20,7 +20,7 @@ export function buildSearchFaqTool(faqService: FaqService) {
     execute: async (inputData) => {
       const { query } = inputData;
 
-      // 1. Buscar en la FAQ global (página en Plane proyecto FMTFAQ)
+      // 1. Buscar en la FAQ global (proyecto FMT Base Conocimiento en Plane)
       const pageMatch = await faqService.searchFaq(query);
       if (pageMatch) {
         return {
@@ -37,7 +37,7 @@ export function buildSearchFaqTool(faqService: FaqService) {
       if (!staticMatch) {
         return {
           found: false,
-          message: 'No se encontró una respuesta automática para esta consulta. Se recomienda crear un ticket.',
+          message: 'No se encontró una respuesta automática. Crear ticket.',
         };
       }
 
