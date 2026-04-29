@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { GupshupService } from '../integrations/gupshup/gupshup.service';
+import { MetaWhatsappService } from '../integrations/meta/meta-whatsapp.service';
 import { CustomersService } from '../customers/customers.service';
 import { PlaneService } from '../integrations/plane/plane.service';
 
@@ -30,7 +30,7 @@ export class PlaneWebhookController {
 
   constructor(
     private readonly planeService: PlaneService,
-    private readonly gupshupService: GupshupService,
+    private readonly metaService: MetaWhatsappService,
     private readonly customersService: CustomersService,
   ) {}
 
@@ -88,7 +88,7 @@ export class PlaneWebhookController {
         `Si el problema persiste o tenés alguna consulta adicional, no dudes en escribirnos.\n\n` +
         `— Equipo de Soporte Fullmindtech`;
 
-      await this.gupshupService.sendTextMessage(phone, message);
+      await this.metaService.sendTextMessage(phone, message);
       this.logger.log(`Notificación enviada a ${phone} por resolución del ticket ${planeTicketId}`);
     } catch (error: unknown) {
       this.logger.error(

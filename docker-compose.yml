@@ -1,36 +1,11 @@
 version: '3.9'
 
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: soporte_db
-    environment:
-      POSTGRES_USER: soporte_user
-      POSTGRES_PASSWORD: soporte_pass
-      POSTGRES_DB: soporte_db
-    ports:
-      - '5432:5432'
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U soporte_user -d soporte_db']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
     container_name: soporte_agent
-    depends_on:
-      db:
-        condition: service_healthy
     env_file:
       - .env
-    environment:
-      DATABASE_URL: postgresql://soporte_user:soporte_pass@db:5432/soporte_db
     ports:
       - '${PORT:-3000}:3000'
     restart: unless-stopped
-
-volumes:
-  postgres_data:
