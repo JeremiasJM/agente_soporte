@@ -19,7 +19,7 @@ export function buildValidateCustomerTool(
       identifier: z
         .string()
         .describe(
-          'Número de WhatsApp del cliente (disponible en [Teléfono del cliente:...] del contexto). Usar siempre este valor primero.',
+          'Número de teléfono a validar. Usar primero el valor de [Teléfono del cliente:...] del contexto. Si el cliente indicó un número diferente en la conversación, usar ese número alternativo en su lugar.',
         ),
       clientCode: z
         .string()
@@ -38,13 +38,14 @@ export function buildValidateCustomerTool(
 
       // 2. Teléfono no registrado — flujo código + PIN
       if (!customer) {
-        // 2a. Sin código → pedir código
+        // 2a. Sin código → pedir código con explicación de qué es
         if (!clientCode) {
           return {
             valid: false,
             requiresClientCode: true,
+            phoneChecked: identifier,
             message:
-              'El número de teléfono no está registrado. Solicitá al cliente su **código de cliente** para validarlo.',
+              'Teléfono no registrado. Opciones: (1) El cliente puede dar otro número con el que se contrató el servicio. (2) Puede dar su código de cliente (ej: TN-001, RP-001) — fue entregado por Fullmindtech al inicio del contrato. (3) Si no tiene el código, debe contactar a soporte@fullmindtech.com.ar.',
           };
         }
         // 2b. Código presente pero sin PIN → pedir PIN (nunca intentar sin él)

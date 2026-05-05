@@ -19,30 +19,45 @@ export function buildQueryTicketTool(
         .string()
         .optional()
         .describe('Numero de secuencia del ticket (ej: "1", "2") o UUID de Plane.'),
+      projectId: z
+        .string()
+        .optional()
+        .describe('ID del proyecto del cliente. Disponible en el resultado de validate-customer como projects[0].id. Preferir este sobre customerPhone si ya se valido al cliente.'),
       customerPhone: z
         .string()
-        .describe('Telefono del cliente para buscar en su proyecto. Disponible en [Telefono del cliente:...] del contexto.'),
+        .optional()
+        .describe('Telefono del cliente como fallback si no se tiene projectId.'),
       all: z
         .boolean()
         .optional()
         .describe('Si es true, devuelve el estado de todos los tickets recientes del proyecto.'),
     }),
     execute: async (inputData) => {
-      const { ticketId, customerPhone, all } = inputData;
+      const { ticketId, projectId, customerPhone, all } = inputData;
 
-      const customer = await customersService.validateCustomer(customerPhone);
-      if (!customer) {
-        return { found: false, message: `Cliente con telefono ${customerPhone} no encontrado.` };
+      let resolvedProjectId: string | undefined = projectId;
+
+      if (!resolvedProjectId) {
+        if (!customerPhone) {
+          return { found: false, message: 'Necesito el projectId del cliente validado o su telefono para consultar tickets.' };
+        }
+        const customer = await customersService.validateCustomer(customerPhone);
+        if (!customer) {
+          return { found: false, message: `Cliente con telefono ${customerPhone} no encontrado.` };
+        }
+        const projects = await customersService.getActiveProjects(customer.id);
+        if (projects.length === 0) {
+          return { found: false, message: 'No se encontro un proyecto activo para este cliente.' };
+        }
+        resolvedProjectId = projects[0].id;
       }
 
-      const projects = await customersService.getActiveProjects(customer.id);
-      if (projects.length === 0) {
-        return { found: false, message: 'No se encontro un proyecto activo para este cliente.' };
-      }
+      // Wrap project in array for unified handling
+      const projectIds = [resolvedProjectId];
 
       if (all) {
         const lists = await Promise.all(
-          projects.map((project) => ticketsService.listTicketStatuses(project.id, 20)),
+          projectIds.map((pid) => ticketsService.listTicketStatuses(pid, 20)),
         );
         const tickets = lists.flat().slice(0, 20);
         if (tickets.length === 0) {
@@ -65,8 +80,8 @@ export function buildQueryTicketTool(
       }
 
       let result: Awaited<ReturnType<typeof ticketsService.getTicketStatus>> | null = null;
-      for (const project of projects) {
-        const current = await ticketsService.getTicketStatus(ticketId, project.id);
+      for (const pid of projectIds) {
+        const current = await ticketsService.getTicketStatus(ticketId, pid);
         if (current.found) {
           result = current;
           break;

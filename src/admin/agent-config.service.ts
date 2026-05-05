@@ -1,19 +1,26 @@
-import { Agent } from '@mastra/core/agent';
-import { createOpenAI } from '@ai-sdk/openai';
-import { buildValidateCustomerTool } from './tools/validate-customer.tool';
-import { buildCheckUptimeTool } from './tools/check-uptime.tool';
-import { buildCheckHoursTool } from './tools/check-hours.tool';
-import { buildCreateTicketTool } from './tools/create-ticket.tool';
-import { buildQueryTicketTool } from './tools/query-ticket.tool';
-import { buildSearchFaqTool } from './tools/search-faq.tool';
-import { CustomersService } from '../customers/customers.service';
-import { UptimeService } from '../integrations/uptime/uptime.service';
-import { HoursService } from '../hours/hours.service';
-import { TicketsService } from '../tickets/tickets.service';
-import { FaqService } from '../faq/faq.service';
-import { PlaneService } from '../integrations/plane/plane.service';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const SYSTEM_PROMPT_DEFAULT = `Sos el asistente de soporte de Fullmindtech por WhatsApp.
+export interface FaqEntry {
+  id: string;
+  keywords: string[];
+  question: string;
+  answer: string;
+  category?: string;
+}
+
+export interface AgentSettings {
+  llmModel: string;
+}
+
+export interface AgentConfig {
+  systemPrompt: string;
+  settings: AgentSettings;
+  faqs: FaqEntry[];
+}
+
+const DEFAULT_SYSTEM_PROMPT = `Sos el asistente de soporte de Fullmindtech por WhatsApp.
 Atendes a clientes de todo tipo — muchos no son tecnicos. Tu trabajo es guiarlos paso a paso, con paciencia y claridad, hasta resolver su problema o dejar registrado un ticket.
 
 ## REGLA DE ORO — UNA SOLA RESPUESTA
@@ -58,6 +65,7 @@ Resultado de validate-customer:
 A) valid=true → Cliente verificado. Continuar con PASO 4.
 
 B) requiresClientCode=true (telefono no registrado):
+
    Analizá lo que dijo el cliente y respondé segun el caso:
 
    - Solo saludo o no dijo nada util todavia:
@@ -124,33 +132,153 @@ Traducir al cliente siempre: abierto | en_proceso → "en proceso" | cerrado | b
 ## REGLA FINAL
 Cada respuesta tiene UNA sola pregunta o pedido de datos. Nunca pidas dos cosas a la vez.`;
 
-export { SYSTEM_PROMPT_DEFAULT };
+const DEFAULT_FAQS: FaqEntry[] = [
+  {
+    id: 'faq-1',
+    keywords: ['contrasena', 'password', 'clave', 'olvide', 'restablecer', 'reset'],
+    question: 'Como restablezco mi contrasena?',
+    answer:
+      'Para restablecer tu contrasena, hace clic en "Olvide mi contrasena" en la pantalla de login. Recibiras un email con un enlace para crear una nueva clave. Si no recibes el email, verifica la carpeta de spam.',
+    category: 'acceso',
+  },
+  {
+    id: 'faq-2',
+    keywords: ['no puedo', 'no abre', 'error', 'no carga', 'pantalla', 'blanco', 'cuelga'],
+    question: 'La aplicacion no abre o se congela',
+    answer:
+      'Para resolver problemas de apertura o congelamiento:\n1. Cerra completamente la aplicacion\n2. Limpia el cache del navegador (Ctrl+Shift+Del)\n3. Intenta desde otro navegador o dispositivo\n4. Si el problema persiste, puede ser un problema del servidor.',
+    category: 'rendimiento',
+  },
+  {
+    id: 'faq-3',
+    keywords: ['lento', 'tarda', 'demora', 'rendimiento', 'performance'],
+    question: 'El sistema responde muy lento',
+    answer:
+      'Si el sistema esta lento: verifica tu conexion a internet, limpia el cache del navegador, y cerra pestanas innecesarias. Si la lentitud es generalizada, puede ser un problema del servidor que el equipo ya esta monitoreando.',
+    category: 'rendimiento',
+  },
+  {
+    id: 'faq-4',
+    keywords: ['factura', 'facturacion', 'facturar', 'comprobante', 'afip'],
+    question: 'No puedo emitir facturas o hay un error con AFIP',
+    answer:
+      'Problemas de facturacion suelen relacionarse con el certificado AFIP vencido. Verifica en Configuracion -> AFIP que el certificado este vigente. Si persiste, creamos el ticket para que el equipo tecnico lo revise.',
+    category: 'facturacion',
+  },
+  {
+    id: 'faq-5',
+    keywords: ['login', 'sesion', 'ingresar', 'acceder', 'usuario', 'no entra'],
+    question: 'No puedo iniciar sesion',
+    answer:
+      'Si no podes ingresar: verifica que Caps Lock este desactivado, proba con "Olvide mi contrasena", o limpia las cookies del navegador. Si el usuario fue bloqueado, nuestro equipo puede desbloquearlo.',
+    category: 'acceso',
+  },
+  {
+    id: 'faq-6',
+    keywords: ['datos', 'perdi', 'borro', 'desaparecio', 'backup', 'recuperar'],
+    question: 'Perdi datos o informacion del sistema',
+    answer:
+      'Para recuperacion de datos es necesario que un tecnico revise los logs. Creamos el ticket con prioridad alta para que el equipo lo atienda a la brevedad. No realices cambios en el sistema hasta que te contactemos.',
+    category: 'datos',
+  },
+];
 
-export function createSupportAgent(
-  customersService: CustomersService,
-  uptimeService: UptimeService,
-  hoursService: HoursService,
-  ticketsService: TicketsService,
-  faqService: FaqService,
-  planeService: PlaneService,
-  llmApiKey: string,
-  llmModel: string,
-  systemPrompt?: string,
-): Agent {
-  const openai = createOpenAI({ apiKey: llmApiKey });
+@Injectable()
+export class AgentConfigService implements OnModuleInit {
+  private readonly logger = new Logger(AgentConfigService.name);
+  private readonly configPath: string;
+  private config!: AgentConfig;
 
-  return new Agent({
-    id: 'soporte-agent',
-    name: 'Agente de Soporte Fullmindtech',
-    instructions: systemPrompt ?? SYSTEM_PROMPT_DEFAULT,
-    model: openai(llmModel) as never,
-    tools: {
-      validateCustomer: buildValidateCustomerTool(customersService, planeService),
-      checkUptime: buildCheckUptimeTool(uptimeService),
-      checkHours: buildCheckHoursTool(hoursService),
-      createTicket: buildCreateTicketTool(ticketsService, hoursService, customersService),
-      queryTicket: buildQueryTicketTool(ticketsService, customersService),
-      searchFaq: buildSearchFaqTool(faqService),
-    },
-  });
+  constructor() {
+    // En producción Docker el volumen se monta en /app/agent-config/
+    // En desarrollo se guarda en la raíz del proyecto
+    const configDir =
+      process.env.NODE_ENV === 'production'
+        ? path.join(process.cwd(), 'agent-config')
+        : process.cwd()
+
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true })
+    }
+
+    this.configPath = path.join(configDir, 'agent-config.json')
+  }
+
+  onModuleInit(): void {
+    this.load();
+  }
+
+  private load(): void {
+    if (fs.existsSync(this.configPath)) {
+      try {
+        const raw = fs.readFileSync(this.configPath, 'utf-8');
+        this.config = JSON.parse(raw) as AgentConfig;
+        this.logger.log('Configuración del agente cargada desde agent-config.json');
+        return;
+      } catch {
+        this.logger.warn('No se pudo parsear agent-config.json, usando config por defecto');
+      }
+    }
+
+    this.config = {
+      systemPrompt: DEFAULT_SYSTEM_PROMPT,
+      settings: { llmModel: 'gpt-4o' },
+      faqs: DEFAULT_FAQS,
+    };
+    this.save();
+    this.logger.log('Configuración por defecto guardada en agent-config.json');
+  }
+
+  private save(): void {
+    fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
+  }
+
+  getConfig(): AgentConfig {
+    return this.config;
+  }
+
+  getSystemPrompt(): string {
+    return this.config.systemPrompt;
+  }
+
+  updateSystemPrompt(prompt: string): void {
+    this.config.systemPrompt = prompt;
+    this.save();
+  }
+
+  getSettings(): AgentSettings {
+    return this.config.settings;
+  }
+
+  updateSettings(settings: Partial<AgentSettings>): void {
+    this.config.settings = { ...this.config.settings, ...settings };
+    this.save();
+  }
+
+  getFaqs(): FaqEntry[] {
+    return this.config.faqs;
+  }
+
+  addFaq(entry: Omit<FaqEntry, 'id'>): FaqEntry {
+    const newEntry: FaqEntry = { ...entry, id: `faq-${Date.now()}` };
+    this.config.faqs.push(newEntry);
+    this.save();
+    return newEntry;
+  }
+
+  updateFaq(id: string, data: Partial<Omit<FaqEntry, 'id'>>): FaqEntry | null {
+    const index = this.config.faqs.findIndex((f) => f.id === id);
+    if (index === -1) return null;
+    this.config.faqs[index] = { ...this.config.faqs[index], ...data };
+    this.save();
+    return this.config.faqs[index];
+  }
+
+  deleteFaq(id: string): boolean {
+    const before = this.config.faqs.length;
+    this.config.faqs = this.config.faqs.filter((f) => f.id !== id);
+    if (this.config.faqs.length === before) return false;
+    this.save();
+    return true;
+  }
 }

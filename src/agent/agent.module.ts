@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { CustomersModule } from '../customers/customers.module';
 import { HoursModule } from '../hours/hours.module';
@@ -7,6 +7,7 @@ import { FaqModule } from '../faq/faq.module';
 import { ConversationModule } from '../conversation/conversation.module';
 import { UptimeModule } from '../integrations/uptime/uptime.module';
 import { PlaneModule } from '../integrations/plane/plane.module';
+import { AgentConfigModule } from '../admin/agent-config.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PlaneModule } from '../integrations/plane/plane.module';
     ConversationModule,
     UptimeModule,
     PlaneModule,
+    AgentConfigModule,
   ],
   providers: [AgentService],
   exports: [AgentService],

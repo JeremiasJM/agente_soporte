@@ -6,3 +6,6 @@ node_modules
 dist/
 -w
 *.csv
+# Config del agente persistido en runtime (no versionar)
+agent-config.json
+tsconfig.build.tsbuildinfo

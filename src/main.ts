@@ -26,14 +26,17 @@ async function bootstrap(): Promise<void> {
   app.useStaticAssets(join(process.cwd(), 'public'));
 
   // CORS: permitir el widget en localhost y en producción
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
+  // ADMIN_UI_ORIGIN puede agregarse en .env (ej: http://localhost:5174)
+  const allowedOrigins = (
+    process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
+  )
     .split(',')
     .map((o) => o.trim());
 
   app.enableCors({
     origin: allowedOrigins,
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-admin-key'],
   });
 
   // Permitir embebido en iframes de cualquier origen

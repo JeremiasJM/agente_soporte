@@ -12,6 +12,7 @@ import { HoursService } from '../hours/hours.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { FaqService } from '../faq/faq.service';
 import { PlaneService } from '../integrations/plane/plane.service';
+import { AgentConfigService } from '../admin/agent-config.service';
 
 @Injectable()
 export class AgentService implements OnModuleInit {
@@ -27,11 +28,18 @@ export class AgentService implements OnModuleInit {
     private readonly ticketsService: TicketsService,
     private readonly faqService: FaqService,
     private readonly planeService: PlaneService,
+    private readonly agentConfigService: AgentConfigService,
   ) {}
 
   onModuleInit(): void {
+    this.reloadAgent();
+  }
+
+  reloadAgent(): void {
     const llmApiKey = this.config.getOrThrow<string>('OPENAI_API_KEY');
-    const llmModel = this.config.get<string>('LLM_MODEL', 'gpt-4o');
+    const agentConfig = this.agentConfigService.getConfig();
+    const llmModel = agentConfig.settings.llmModel;
+    const systemPrompt = agentConfig.systemPrompt;
 
     this.agent = createSupportAgent(
       this.customersService,
@@ -42,9 +50,10 @@ export class AgentService implements OnModuleInit {
       this.planeService,
       llmApiKey,
       llmModel,
+      systemPrompt,
     );
 
-    this.logger.log(`Agente inicializado con modelo: ${llmModel}`);
+    this.logger.log(`Agente (re)inicializado con modelo: ${llmModel}`);
   }
 
   /**
@@ -70,8 +79,11 @@ export class AgentService implements OnModuleInit {
     }));
 
     try {
-      // Incluir canal y teléfono del cliente (threadId) para que el agente los use directamente
-      const enrichedMessage = `[Canal: ${channel}] [Teléfono del cliente: ${threadId}] ${userMessage}`;
+      // Incluir canal, teléfono del cliente y hora actual para que el agente los use directamente
+      const now = new Date();
+      const horaLocal = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' });
+      const fechaLocal = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires' });
+      const enrichedMessage = `[Canal: ${channel}] [Teléfono del cliente: ${threadId}] [Hora local: ${horaLocal} — ${fechaLocal}] ${userMessage}`;
 
       // Reemplazar el último mensaje user con el enriquecido
       if (messages.length > 0) {

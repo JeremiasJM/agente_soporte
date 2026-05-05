@@ -2,10 +2,37 @@ version: '3.9'
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: soporte_agent
     env_file:
       - .env
     ports:
       - '${PORT:-3000}:3000'
+    volumes:
+      # Persistir agent-config.json fuera del contenedor
+      - agent_config:/app/agent-config
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/chat']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  admin-ui:
+    build:
+      context: ../admin-ui
+      dockerfile: Dockerfile
+      args:
+        # La API key se pasa como build arg — definir en .env o en el CI/CD
+        VITE_ADMIN_API_KEY: ${ADMIN_API_KEY}
+    container_name: soporte_admin_ui
+    ports:
+      - '${ADMIN_UI_PORT:-8080}:80'
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  agent_config:

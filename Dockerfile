@@ -6,7 +6,8 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+# Compilar con tsc directamente deshabilitando incremental (evita bugs de caché en CI)
+RUN npx tsc -p tsconfig.build.json --incremental false
 
 # ---------------------------------------------------------------------------
 # Runtime image
