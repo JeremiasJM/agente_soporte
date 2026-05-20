@@ -6,13 +6,15 @@ import {
   Delete,
   Body,
   Param,
-  Headers,
-  UnauthorizedException,
   NotFoundException,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
+import { AdminGuard } from './admin.guard';
 import { AgentConfigService } from './agent-config.service';
 import { AgentService } from '../agent/agent.service';
 import { UpdatePromptDto } from './dto/update-prompt.dto';
@@ -31,10 +33,22 @@ export class AdminController {
     this.adminApiKey = this.config.getOrThrow<string>('ADMIN_API_KEY');
   }
 
-  private checkAuth(apiKey: string | undefined): void {
-    if (!apiKey || apiKey !== this.adminApiKey) {
-      throw new UnauthorizedException('API key inválida');
+  // ────────────────────────────────────────────
+  // Auth (no guard — public endpoint)
+  // ────────────────────────────────────────────
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  login(@Body() body: { password: string }) {
+    if (!body.password || body.password !== this.adminApiKey) {
+      throw new UnauthorizedException('Contraseña incorrecta');
     }
+
+    const token = jwt.sign({ role: 'admin' }, this.adminApiKey, {
+      expiresIn: '8h',
+    });
+
+    return { token };
   }
 
   // ────────────────────────────────────────────
@@ -42,8 +56,8 @@ export class AdminController {
   // ────────────────────────────────────────────
 
   @Get('config')
-  getConfig(@Headers('x-admin-key') key: string) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  getConfig() {
     return this.agentConfigService.getConfig();
   }
 
@@ -52,14 +66,14 @@ export class AdminController {
   // ────────────────────────────────────────────
 
   @Get('prompt')
-  getPrompt(@Headers('x-admin-key') key: string) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  getPrompt() {
     return { prompt: this.agentConfigService.getSystemPrompt() };
   }
 
   @Put('prompt')
-  updatePrompt(@Headers('x-admin-key') key: string, @Body() dto: UpdatePromptDto) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  updatePrompt(@Body() dto: UpdatePromptDto) {
     this.agentConfigService.updateSystemPrompt(dto.prompt);
     this.agentService.reloadAgent();
     return { ok: true, message: 'Prompt actualizado. Agente recargado.' };
@@ -70,14 +84,14 @@ export class AdminController {
   // ────────────────────────────────────────────
 
   @Get('settings')
-  getSettings(@Headers('x-admin-key') key: string) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  getSettings() {
     return this.agentConfigService.getSettings();
   }
 
   @Put('settings')
-  updateSettings(@Headers('x-admin-key') key: string, @Body() dto: UpdateSettingsDto) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  updateSettings(@Body() dto: UpdateSettingsDto) {
     this.agentConfigService.updateSettings({ llmModel: dto.llmModel });
     this.agentService.reloadAgent();
     return { ok: true, message: 'Settings actualizados. Agente recargado.' };
@@ -88,35 +102,31 @@ export class AdminController {
   // ────────────────────────────────────────────
 
   @Get('faqs')
-  getFaqs(@Headers('x-admin-key') key: string) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  getFaqs() {
     return this.agentConfigService.getFaqs();
   }
 
   @Post('faqs')
+  @UseGuards(AdminGuard)
   @HttpCode(HttpStatus.CREATED)
-  createFaq(@Headers('x-admin-key') key: string, @Body() dto: CreateFaqDto) {
-    this.checkAuth(key);
+  createFaq(@Body() dto: CreateFaqDto) {
     const created = this.agentConfigService.addFaq(dto);
     return created;
   }
 
   @Put('faqs/:id')
-  updateFaq(
-    @Headers('x-admin-key') key: string,
-    @Param('id') id: string,
-    @Body() dto: UpdateFaqDto,
-  ) {
-    this.checkAuth(key);
+  @UseGuards(AdminGuard)
+  updateFaq(@Param('id') id: string, @Body() dto: UpdateFaqDto) {
     const updated = this.agentConfigService.updateFaq(id, dto);
     if (!updated) throw new NotFoundException(`FAQ con id "${id}" no encontrada`);
     return updated;
   }
 
   @Delete('faqs/:id')
+  @UseGuards(AdminGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  deleteFaq(@Headers('x-admin-key') key: string, @Param('id') id: string) {
-    this.checkAuth(key);
+  deleteFaq(@Param('id') id: string) {
     const deleted = this.agentConfigService.deleteFaq(id);
     if (!deleted) throw new NotFoundException(`FAQ con id "${id}" no encontrada`);
   }

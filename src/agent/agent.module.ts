@@ -5,7 +5,6 @@ import { HoursModule } from '../hours/hours.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { FaqModule } from '../faq/faq.module';
 import { ConversationModule } from '../conversation/conversation.module';
-import { UptimeModule } from '../integrations/uptime/uptime.module';
 import { PlaneModule } from '../integrations/plane/plane.module';
 import { AgentConfigModule } from '../admin/agent-config.module';
 
@@ -16,7 +15,6 @@ import { AgentConfigModule } from '../admin/agent-config.module';
     TicketsModule,
     FaqModule,
     ConversationModule,
-    UptimeModule,
     PlaneModule,
     AgentConfigModule,
   ],

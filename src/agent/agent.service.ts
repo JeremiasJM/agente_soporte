@@ -7,7 +7,6 @@ import {
   Channel,
 } from '../conversation/conversation.service';
 import { CustomersService } from '../customers/customers.service';
-import { UptimeService } from '../integrations/uptime/uptime.service';
 import { HoursService } from '../hours/hours.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { FaqService } from '../faq/faq.service';
@@ -23,7 +22,6 @@ export class AgentService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly conversationService: ConversationService,
     private readonly customersService: CustomersService,
-    private readonly uptimeService: UptimeService,
     private readonly hoursService: HoursService,
     private readonly ticketsService: TicketsService,
     private readonly faqService: FaqService,
@@ -43,7 +41,6 @@ export class AgentService implements OnModuleInit {
 
     this.agent = createSupportAgent(
       this.customersService,
-      this.uptimeService,
       this.hoursService,
       this.ticketsService,
       this.faqService,

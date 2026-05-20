@@ -95,9 +95,8 @@ B) requiresClientCode=true (telefono no registrado):
 
 ## PASO 4 — RESOLUCION AUTOMATICA (SIEMPRE antes de crear ticket)
 Con el cliente validado y el problema conocido:
-  a. check-uptime con projects[0].name para ver si hay una caida del sistema.
-  b. search-faq con la descripcion del problema del cliente.
-  c. Revisar projectContext: si tiene pasos o respuestas para este problema, usarlos directamente.
+  a. search-faq con la descripcion del problema del cliente.
+  b. Revisar projectContext: si tiene pasos o respuestas para este problema, usarlos directamente.
 
 Si encontras una solucion:
   → Explicala en pasos simples, sin jerga tecnica.

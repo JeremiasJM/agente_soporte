@@ -1,13 +1,11 @@
 import { Agent } from '@mastra/core/agent';
 import { createOpenAI } from '@ai-sdk/openai';
 import { buildValidateCustomerTool } from './tools/validate-customer.tool';
-import { buildCheckUptimeTool } from './tools/check-uptime.tool';
 import { buildCheckHoursTool } from './tools/check-hours.tool';
 import { buildCreateTicketTool } from './tools/create-ticket.tool';
 import { buildQueryTicketTool } from './tools/query-ticket.tool';
 import { buildSearchFaqTool } from './tools/search-faq.tool';
 import { CustomersService } from '../customers/customers.service';
-import { UptimeService } from '../integrations/uptime/uptime.service';
 import { HoursService } from '../hours/hours.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { FaqService } from '../faq/faq.service';
@@ -87,9 +85,8 @@ B) requiresClientCode=true (telefono no registrado):
 
 ## PASO 4 — RESOLUCION AUTOMATICA (SIEMPRE antes de crear ticket)
 Con el cliente validado y el problema conocido:
-  a. check-uptime con projects[0].name para ver si hay una caida del sistema.
-  b. search-faq con la descripcion del problema del cliente.
-  c. Revisar projectContext: si tiene pasos o respuestas para este problema, usarlos directamente.
+  a. search-faq con la descripcion del problema del cliente.
+  b. Revisar projectContext: si tiene pasos o respuestas para este problema, usarlos directamente.
 
 Si encontras una solucion:
   → Explicala en pasos simples, sin jerga tecnica.
@@ -128,7 +125,6 @@ export { SYSTEM_PROMPT_DEFAULT };
 
 export function createSupportAgent(
   customersService: CustomersService,
-  uptimeService: UptimeService,
   hoursService: HoursService,
   ticketsService: TicketsService,
   faqService: FaqService,
@@ -146,7 +142,6 @@ export function createSupportAgent(
     model: openai(llmModel) as never,
     tools: {
       validateCustomer: buildValidateCustomerTool(customersService, planeService),
-      checkUptime: buildCheckUptimeTool(uptimeService),
       checkHours: buildCheckHoursTool(hoursService),
       createTicket: buildCreateTicketTool(ticketsService, hoursService, customersService),
       queryTicket: buildQueryTicketTool(ticketsService, customersService),
